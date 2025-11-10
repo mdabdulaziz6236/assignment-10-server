@@ -110,6 +110,22 @@ async function run() {
         categoryTotal,
       });
     });
+    /* delete a transaction by id and verify by email */
+    app.delete("/transaction/:id", verifyToken, async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const transaction = await transactionCollection.findOne(query);
+      if (!transaction) {
+        return res.status(404).send({ message: "Transaction not found" });
+      }
+      if (transaction.email !== req.user.email) {
+        return res
+          .status(403)
+          .send({ message: "Forbidden: Not your transaction" });
+      }
+      const result = await transactionCollection.deleteOne(query);
+      res.send({ result, message: "Transaction deleted successfully" });
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
