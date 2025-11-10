@@ -1,6 +1,6 @@
 const express = require("express");
 const cors = require("cors");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 const serviceAccount = require("./firebase-service-key.json");
 require("dotenv").config();
@@ -72,6 +72,45 @@ async function run() {
         .toArray();
       res.send(result);
     });
+    /* Get a Single Transaction by ID (with Category Total) */
+    app.get("/transaction/:id", verifyToken, async (req, res) => {
+      const { id } = req.params;
+      const query = { _id: new ObjectId(id) };
+      const transaction = await transactionCollection.findOne(query);
+      if (!transaction) {
+        return res.status(404).send({ message: "Transaction not found" });
+      }
+      if (transaction.email !== req.user.email) {
+        return res
+          .status(403)
+          .send({ message: "Forbidden: You do not own this transaction" });
+      }
+      const pipeline = [
+        {
+          $match: {
+            email: transaction.email,
+            category: transaction.category,
+            type: transaction.type,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$amount" },
+          },
+        },
+      ];
+      const categoryTotalResult = await transactionCollection
+        .aggregate(pipeline)
+        .toArray();
+      const categoryTotal =
+        categoryTotalResult.length > 0 ? categoryTotalResult[0].total : 0;
+      res.send({
+        transaction,
+        categoryTotal,
+      });
+    });
+
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
