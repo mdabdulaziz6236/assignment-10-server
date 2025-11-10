@@ -22,6 +22,15 @@ async function run() {
   try {
     await client.connect();
 
+    const db = client.db('FinEase')
+    const transactionCollection = db.collection("transactions");
+
+
+    app.post('/transactions', async(req,res)=>{
+      const newTransaction = req.body;
+      const result = await transactionCollection.insertOne(newTransaction)
+      res.send(result)
+    })
 
 
 
