@@ -21,6 +21,11 @@ const verifyToken = async (req, res, next) => {
     });
   }
   const token = authorization.split(" ")[1];
+  if (!token) {
+    res.status(401).send({
+      message: "Unauthorized access. Token not found",
+    });
+  }
   try {
     const decoderUser = await admin.auth().verifyIdToken(token);
     req.user = decoderUser;
@@ -144,7 +149,45 @@ async function run() {
 
       res.send({ message: "Transaction updated successfully" });
     });
+    /* Total Overview for Balance , Income and Expense */
+    app.get("/totalOverview", verifyToken, async (req, res) => {
+      try {
+        const userEmail = req.user.email;
+        const pipeline = [
+          {
+            $match: { email: userEmail },
+          },
+          {
+            $group: {
+              _id: "$type",
+              totalAmount: { $sum: "$amount" },
+            },
+          },
+        ];
+        const result = await transactionCollection
+          .aggregate(pipeline)
+          .toArray();
+        let totalIncome = 0;
+        let totalExpense = 0;
 
+        result.forEach((item) => {
+          if (item._id === "income") {
+            totalIncome = item.totalAmount;
+          } else if (item._id === "expense" || item._id === "expanse") {
+            totalExpense = item.totalAmount;
+          }
+        });
+        const totalBalance = totalIncome - totalExpense;
+        res.send({
+          totalIncome,
+          totalExpense,
+          totalBalance,
+        });
+      } catch (error) {
+        console.error("Error fetching overview:", error);
+        res.status(500).send({ message: "Failed to fetch overview data" });
+      }
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
