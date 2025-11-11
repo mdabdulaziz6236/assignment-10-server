@@ -188,6 +188,46 @@ async function run() {
         res.status(500).send({ message: "Failed to fetch overview data" });
       }
     });
+    /* User Transaction report by category and monthly */
+    app.get("/reports", verifyToken, async (req, res) => {
+      const userEmail = req.query.email;
+      if (req.user.email !== userEmail) {
+        return res.status(403).send({ message: "Forbidden: Not your data" });
+      }
+      const transactions = await transactionCollection
+        .find({ email: userEmail })
+        .toArray();
+      const categoryData = transactions.reduce((acc, tx) => {
+        const existing = acc.find((item) => item.name === tx.category);
+        if (existing) {
+          existing.value += tx.amount;
+        } else {
+          acc.push({ name: tx.category, value: tx.amount });
+        }
+        return acc;
+      }, []);
+      const monthlyData = Array.from({ length: 12 }, (_, i) => {
+        const monthIncome = transactions
+          .filter(
+            (tx) =>
+              new Date(tx.date).getMonth() === i &&
+              tx.type.toLowerCase() === "income")
+          .reduce((sum, tx) => sum + tx.amount, 0);
+        const monthExpense = transactions
+          .filter(
+            (tx) =>
+              new Date(tx.date).getMonth() === i &&
+              (tx.type.toLowerCase() === "expense" ||
+                tx.type.toLowerCase() === "expanse")          )
+          .reduce((sum, tx) => sum + tx.amount, 0);
+        return {
+          month: new Date(0, i).toLocaleString("default", { month: "short" }),
+          income: monthIncome,
+          expense: monthExpense,
+        };
+      });
+      res.send({ categoryData, monthlyData });
+    });
     await client.db("admin").command({ ping: 1 });
     console.log(
       "Pinged your deployment. You successfully connected to MongoDB!"
